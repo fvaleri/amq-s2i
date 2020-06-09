@@ -1,0 +1,14 @@
+*.iml
+.DS_Store
+.idea
+.classpath
+.project
+.settings
+.vscode
+.factorypath
+*.log
+*.log.*
+*.class
+*.out
+*.hprof
+*.cap
