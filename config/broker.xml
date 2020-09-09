@@ -1,22 +1,21 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" ?>
 <configuration xmlns="urn:activemq" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:xi="http://www.w3.org/2001/XInclude" xsi:schemaLocation="urn:activemq /schema/artemis-configuration.xsd">
 
     <core xmlns="urn:activemq:core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:activemq:core ">
 
-        <name>s2i-broker</name>
+        <name>${AMQ_NAME}</name>
         <persistence-enabled>true</persistence-enabled>
         <journal-type>NIO</journal-type>
-        <paging-directory>data/paging</paging-directory>
-        <bindings-directory>data/bindings</bindings-directory>
-        <journal-directory>data/journal</journal-directory>
-        <large-messages-directory>data/large-messages</large-messages-directory>
+        <paging-directory>/opt/my-broker/data/paging</paging-directory>
+        <bindings-directory>/opt/my-broker/data/bindings</bindings-directory>
+        <journal-directory>/opt/my-broker/data/journal</journal-directory>
+        <large-messages-directory>/opt/my-broker/data/large-messages</large-messages-directory>
         <journal-datasync>true</journal-datasync>
         <journal-min-files>2</journal-min-files>
         <journal-pool-files>10</journal-pool-files>
+        <journal-device-block-size>4096</journal-device-block-size>
         <journal-file-size>10M</journal-file-size>
-        <journal-buffer-timeout>3504000</journal-buffer-timeout>
-        <journal-max-io>1</journal-max-io>
         <disk-scan-period>5000</disk-scan-period>
         <max-disk-usage>90</max-disk-usage>
         <critical-analyzer>true</critical-analyzer>
@@ -24,28 +23,63 @@
         <critical-analyzer-check-period>60000</critical-analyzer-check-period>
         <critical-analyzer-policy>HALT</critical-analyzer-policy>
 
+        <connectors>
+            <connector name="artemis">tcp://${BROKER_IP}:61616</connector>
+        </connectors>
+
         <acceptors>
-            <acceptor name="artemis">tcp://0.0.0.0:61616?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=CORE,AMQP,STOMP,HORNETQ,MQTT,OPENWIRE;useEpoll=true;amqpCredits=1000;amqpLowCredits=300</acceptor>
-            <acceptor name="amqp">tcp://0.0.0.0:5672?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=AMQP;useEpoll=true;amqpCredits=1000;amqpLowCredits=300</acceptor>
-            <acceptor name="stomp">tcp://0.0.0.0:61613?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=STOMP;useEpoll=true</acceptor>
-            <acceptor name="hornetq">tcp://0.0.0.0:5445?anycastPrefix=jms.queue.;multicastPrefix=jms.topic.;protocols=HORNETQ,STOMP;useEpoll=true</acceptor>
-            <acceptor name="mqtt">tcp://0.0.0.0:1883?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=MQTT;useEpoll=true</acceptor>
+            <acceptor name="all">tcp://${BROKER_IP}:61617?protocols=AMQP,CORE,HORNETQ,MQTT,OPENWIRE,STOMP;sslEnabled=true;keyStorePath=/etc/tls-secret-volume/broker.ks;keyStorePassword=changeit;trustStorePath=/etc/tls-secret-volume/client.ts;trustStorePassword=changeit;sslProvider=JDK;tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;useEpoll=true;amqpCredits=1000;amqpMinCredits=300</acceptor>
+            <acceptor name="scaleDown">tcp://${BROKER_IP}:61616?protocols=CORE;tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;useEpoll=true;amqpCredits=1000;amqpMinCredits=300</acceptor>
         </acceptors>
+
+        <cluster-user>${AMQ_CLUSTER_USER}</cluster-user>
+        <cluster-password>${AMQ_CLUSTER_PASSWORD}</cluster-password>
+
+        <broadcast-groups>
+            <broadcast-group name="my-broadcast-group">
+                <jgroups-file>jgroups-ping.xml</jgroups-file>
+                <jgroups-channel>activemq_broadcast_channel</jgroups-channel>
+                <connector-ref>artemis</connector-ref>
+            </broadcast-group>
+        </broadcast-groups>
+
+        <discovery-groups>
+            <discovery-group name="my-discovery-group">
+                <jgroups-file>jgroups-ping.xml</jgroups-file>
+                <jgroups-channel>activemq_broadcast_channel</jgroups-channel>
+                <refresh-timeout>10000</refresh-timeout>
+            </discovery-group>
+        </discovery-groups>
+
+        <cluster-connections>
+            <cluster-connection name="my-cluster">
+                <connector-ref>artemis</connector-ref>
+                <retry-interval>1000</retry-interval>
+                <retry-interval-multiplier>2</retry-interval-multiplier>
+                <max-retry-interval>32000</max-retry-interval>
+                <initial-connect-attempts>20</initial-connect-attempts>
+                <reconnect-attempts>10</reconnect-attempts>
+                <use-duplicate-detection>true</use-duplicate-detection>
+                <message-load-balancing>ON_DEMAND</message-load-balancing>
+                <max-hops>1</max-hops>
+                <discovery-group-ref discovery-group-name="my-discovery-group" />
+            </cluster-connection>
+        </cluster-connections>
 
         <security-settings>
             <security-setting match="#">
-               <permission type="createNonDurableQueue" roles="admin"/>
-               <permission type="deleteNonDurableQueue" roles="admin"/>
-               <permission type="createDurableQueue" roles="admin"/>
-               <permission type="deleteDurableQueue" roles="admin"/>
-               <permission type="createAddress" roles="admin"/>
-               <permission type="deleteAddress" roles="admin"/>
-               <permission type="consume" roles="admin,user"/>
-               <permission type="browse" roles="admin,user"/>
-               <permission type="send" roles="admin,user"/>
-               <permission type="manage" roles="admin,user"/>
+                <permission type="createNonDurableQueue" roles="admin" />
+                <permission type="deleteNonDurableQueue" roles="admin" />
+                <permission type="createDurableQueue" roles="admin" />
+                <permission type="deleteDurableQueue" roles="admin" />
+                <permission type="createAddress" roles="admin" />
+                <permission type="deleteAddress" roles="admin" />
+                <permission type="consume" roles="admin" />
+                <permission type="browse" roles="admin" />
+                <permission type="send" roles="admin" />
+                <permission type="manage" roles="admin" />
             </security-setting>
-         </security-settings>
+        </security-settings>
 
         <address-settings>
             <address-setting match="activemq.management#">
@@ -61,6 +95,7 @@
                 <auto-create-jms-topics>true</auto-create-jms-topics>
             </address-setting>
             <address-setting match="#">
+                <redistribution-delay>0</redistribution-delay>
                 <dead-letter-address>DLQ</dead-letter-address>
                 <expiry-address>ExpiryQueue</expiry-address>
                 <redelivery-delay>0</redelivery-delay>
