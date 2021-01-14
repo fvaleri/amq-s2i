@@ -53,7 +53,8 @@ oc set volume statefulset $AMQ_NAME-ss --add --overwrite \
 oc delete pods -l ActiveMQArtemis=$AMQ_NAME
 ```
 
-## S2I Procedure
+## S2I procedure
+This procedure is now deprecated.
 
 ### Image build
 ```sh
